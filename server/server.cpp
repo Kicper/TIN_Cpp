@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <mysql/mysql.h> //baza danych
 #include <unistd.h> // usleep
 
 #include <sys/types.h> // gniazda
@@ -36,6 +36,28 @@
 
 
 using namespace std;
+
+MYSQL *database;
+
+///////////////////////////////////////
+
+
+MYSQL* Server::mysql_connection_setup() {
+	MYSQL *connection = mysql_init(NULL);
+	struct connection_details mysqlD;
+	mysqlD.server = strdup("localhost");  // where the mysql database is
+	mysqlD.user = strdup("root");     // the root user of mysql
+	mysqlD.password = strdup("root"); // the password of the root user in mysql
+	mysqlD.database = strdup("baza"); // the databse to pick
+	if (!mysql_real_connect(connection, mysqlD.server, mysqlD.user, mysqlD.password, mysqlD.database, 0, NULL, 0))
+	{
+		printf("MySQL query error : %s\n", mysql_error(connection));
+		exit(1);
+	}
+	return connection;
+}
+
+////////////////////////////////////////////
 
 int Server::runServer() {
 	database = mysql_connection_setup();
@@ -170,19 +192,90 @@ int Server::isPasswdCorect(char* buf) {
 }
 
 int Server::isLogPwdCorrect(char* login, char* passwd) {
-	
+	database = mysql_connection_setup();
+	MYSQL_RES *res;
+	MYSQL_ROW  row;
+
+	//ustawiamy query
+	char sql_query[1024] = "SELECT * FROM ADMINS WHERE login = '";//  ';INSERT INTO ADMINS (login, passwd) VALUES ('adminek', 'adminek');
+	login = strdup(login);
+	passwd = strdup(passwd);
+	strcat(sql_query, login);
+	char *end = strdup("' AND passwd = '");
+	strcat(sql_query, end);
+	strcat(sql_query, passwd);
+	char *end2 = strdup("';");
+	strcat(sql_query, end2);
+
+	mysql_query(database, sql_query); //wykonanie query i pobranie wyniku
+	res = mysql_use_result(database);
+	row = mysql_fetch_row(res);
+
+	if (row == NULL) return 2; //jesli nie ma takiego wiersza w bazie, to login lub haslo niepoprawne
+	else return 0;
 }
 
 int Server::isIdCardCorrect(char* buf) {
-	
+	if (strlen(buf) > LOGIN_LENGTH_MAX || strlen( buf) < LOGIN_LENGTH_MIN)
+		return 2;
+	database = mysql_connection_setup();
+	MYSQL_RES *res;
+	MYSQL_ROW  row;
+	char sql_query[1024] = "SELECT * FROM CARDS WHERE id = '";
+	buf = strdup(buf);
+	strcat(sql_query, buf);
+
+	char *end2 = strdup("';");
+	strcat(sql_query, end2);
+
+	mysql_query(database, sql_query);
+	res = mysql_use_result(database);
+	row = mysql_fetch_row(res);
+
+	if (row == NULL) return 1; //czyli po prostu jeszcze nie ma takiego loginu w bazie
+	else return 0;
 }
 
 int Server::isUserCodeCorrect(char* buf) {
-	
+	if (strlen(buf) > LOGIN_LENGTH_MAX || strlen( buf) < LOGIN_LENGTH_MIN)
+		return 2;
+	database = mysql_connection_setup();
+	MYSQL_RES *res;
+	MYSQL_ROW  row;
+	char sql_query[1024] = "SELECT * FROM CARDS WHERE user_code = '";
+	buf = strdup(buf);
+	strcat(sql_query, buf);
+
+	char *end2 = strdup("';");
+	strcat(sql_query, end2);
+
+	mysql_query(database, sql_query);
+	res = mysql_use_result(database);
+	row = mysql_fetch_row(res);
+
+	if (row == NULL) return 1; //czyli po prostu jeszcze nie ma takiego loginu w bazie
+	else return 0;
 }
 
 int Server::isUserFingerCorrect(char* buf) {
-	
+	if (strlen(buf) > LOGIN_LENGTH_MAX || strlen( buf) < LOGIN_LENGTH_MIN)
+		return 2;
+	database = mysql_connection_setup();
+	MYSQL_RES *res;
+	MYSQL_ROW  row;
+	char sql_query[1024] = "SELECT * FROM CARDS WHERE finger_prt = '";
+	buf = strdup(buf);
+	strcat(sql_query, buf);
+
+	char *end2 = strdup("';");
+	strcat(sql_query, end2);
+
+	mysql_query(database, sql_query);
+	res = mysql_use_result(database);
+	row = mysql_fetch_row(res);
+
+	if (row == NULL) return 1; //czyli po prostu jeszcze nie ma takiego loginu w bazie
+	else return 0;
 }
 
 
@@ -277,6 +370,19 @@ void Server::createAccount(int msgsock) {
 		write(msgsock, ERRPASS, strlen(ERRPASS));
 		return;
 	}
+/////////////////////
+	database = mysql_connection_setup();
+	char sql_query[1024] = "INSERT INTO ADMINS (login, passwd) VALUES ('"; //ustawiamy query
+	strcat(sql_query, login);
+	char *end = strdup("', '");
+	strcat(sql_query, end);
+	strcat(sql_query, passwd);
+	char *end2 = strdup("');");
+	strcat(sql_query, end2);
+
+	mysql_query(database, sql_query); //wykonanie query
+
+/////////////////////
 
 	write(msgsock, AUTH, strlen(AUTH));
 	cout << "New account created!" << endl;
@@ -304,6 +410,18 @@ void Server::deleteAccount(int msgsock) {
 		write(msgsock, ERRLOG, strlen(ERRLOG));
 		return;
 	}
+
+	//usuwanie konta z bazy
+/////////////////////
+	database = mysql_connection_setup();
+	char sql_query[1024] = "DELETE FROM ADMINS WHERE login = '"; //ustawiamy query
+	strcat(sql_query, login);
+	char *end2 = strdup("';");
+	strcat(sql_query, end2);
+
+	mysql_query(database, sql_query); //wykonanie query
+
+/////////////////////
 
 	write(msgsock, AUTH, strlen(AUTH));
 	cout << "Account deleted" << endl;
@@ -372,6 +490,24 @@ void Server::addCard(int msgsock) {
 	}
 
 
+///////////////////////////
+	database = mysql_connection_setup();
+	char sql_query[1024] = "INSERT INTO CARDS (id, user_code, finger_prt, passwd) VALUES ('";
+	strcat(sql_query, idCard);
+	char *end = strdup("', '");
+	strcat(sql_query, end);
+	strcat(sql_query, userCode);
+	strcat(sql_query, end);
+	strcat(sql_query, userFinger);
+	strcat(sql_query, end);
+	char *end3 = strdup("stdpasswd");
+	strcat(sql_query, end3);
+	char *end2 = strdup("');");
+	strcat(sql_query, end2);
+
+	mysql_query(database, sql_query);
+///////////////////////////
+
 	cout << "New card added!" << endl;
 
 	if (idCardb && userCodeb && userFingerb) write(msgsock, AUTH, strlen(AUTH));
@@ -398,6 +534,16 @@ void Server::deleteCard(int msgsock) {
 		return;
 	}
 
+	//usuwanie karty z bazy
+/////////////////////
+	database = mysql_connection_setup();
+	char sql_query[1024] = "DELETE FROM CARDS WHERE id = '"; //ustawiamy query
+	strcat(sql_query, idCard);
+	char *end2 = strdup("';");
+	strcat(sql_query, end2);
+
+	mysql_query(database, sql_query); //wykonanie query
+/////////////////////
 
 	cout << "Card deleted" << endl;
 	write(msgsock, AUTH, strlen(AUTH));
