@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <mysql/mysql.h> //baza danych
 #include <unistd.h> // usleep
 
 #include <sys/types.h> // gniazda
@@ -11,6 +10,7 @@
 #include <netinet/in.h>
 
 #include "server.h"
+#include "database.h"
 
 #define ERRLOG "login"
 #define ERRPASS "passwd"
@@ -28,6 +28,7 @@
 #define ERR "error"
 
 #define SERV_PORT 6669
+#define SERV_PORT2 7000
 
 #define LOGIN_LENGTH_MAX 20
 #define LOGIN_LENGTH_MIN 4
@@ -37,44 +38,27 @@
 
 using namespace std;
 
-MYSQL *database;
-
-///////////////////////////////////////
 
 
-MYSQL* Server::mysql_connection_setup() {
-	MYSQL *connection = mysql_init(NULL);
-	struct connection_details mysqlD;
-	mysqlD.server = strdup("localhost");  // where the mysql database is
-	mysqlD.user = strdup("root");     // the root user of mysql
-	mysqlD.password = strdup("root"); // the password of the root user in mysql
-	mysqlD.database = strdup("baza"); // the databse to pick
-	if (!mysql_real_connect(connection, mysqlD.server, mysqlD.user, mysqlD.password, mysqlD.database, 0, NULL, 0))
-	{
-		printf("MySQL query error : %s\n", mysql_error(connection));
-		exit(1);
-	}
-	return connection;
-}
+int Server::runServer(Database dbase) {
 
-////////////////////////////////////////////
-
-int Server::runServer() {
-	database = mysql_connection_setup();
-
-	int sock; // gniazdo glowne serwera
-	int msgsock; // zaasocjowane gniazdo dla czujnika
+	int sock, sock2; // gniazdo glowne serwera
+	int msgsock; // zaasocjowane gniazdo
 	socklen_t length;
 	struct sockaddr_in server;
 
-	/* tworzenie gniazda */
+	fd_set ready;//swieze
+	struct timeval to;
+	int nfds, nactive;
+
+	/* tworzenie gniazda dla admina*/
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock == -1) {
 		perror("opening stream socket");
 		return -1;
 	}
 
-	/* dowiaz adres do gniazda */
+	/* dowiaz adres do gniazda  dla admina*/
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = INADDR_ANY;
 	server.sin_port = htons(SERV_PORT);
@@ -93,28 +77,90 @@ int Server::runServer() {
 	}
 	printf("Socket port #%d\n", ntohs(server.sin_port));
 
-
 	/* obsluga wiadomosci */
 	listen(sock, 3);
+
+	/* tworzenie gniazda dla czujnika*/
+	sock2 = socket(AF_INET, SOCK_STREAM, 0);
+	if (sock2 == -1) {
+		perror("opening stream socket");
+		return -1;
+	}
+	/* dowiaz adres do gniazda  dla czujnika*/
+	server.sin_family = AF_INET;
+	server.sin_addr.s_addr = INADDR_ANY;
+	server.sin_port = htons(SERV_PORT2);
+	if (bind(sock2, (struct sockaddr *) &server, sizeof server)
+	        == -1) {
+		perror("binding stream socket");
+		return -1;
+	}
+
+	/* adres na konsoli */
+	length = sizeof( server);
+	if (getsockname(sock2, (struct sockaddr *) &server, &length)
+	        == -1) {
+		perror("getting socket name");
+		return -1;
+	}
+	printf("Socket port #%d\n", ntohs(server.sin_port));
+
+	/* obsluga wiadomosci */
+	listen(sock2, 3);
+
+	nfds = sock2 + 1;
+
 	do {
-		msgsock = accept(sock, (struct sockaddr *) 0, (socklen_t *) 0);
-		if (msgsock == -1 )
-			perror("accept");
-		else {
-			if ( fork() == 0) {
-				close(sock);
-				connectionService(msgsock); //obsluga polaczenia
+		FD_ZERO(&ready);
+		FD_SET(sock, &ready);
+		FD_SET(sock2, &ready);
+		to.tv_sec = 2;
+		to.tv_usec = 0;
+
+		if ( (nactive = select(nfds, &ready, (fd_set *)0, (fd_set *)0, &to)) == -1) {
+			perror("select");
+			continue;
+		}
+
+		if (FD_ISSET(sock, &ready)) { //obsluga admina
+
+			msgsock = accept(sock, (struct sockaddr *) 0, (socklen_t *) 0);
+			if (msgsock == -1 )
+				perror("accept");
+			else {
+				if ( fork() == 0) {
+					close(sock);
+					connectionService(msgsock, dbase); //obsluga polaczenia
+					close(msgsock);
+					exit(0);
+				}
 				close(msgsock);
-				exit(0);
 			}
-			close(msgsock);
+
+		}
+
+		if (FD_ISSET(sock2, &ready)) { //obsluga czujnika
+
+			msgsock = accept(sock2, (struct sockaddr *) 0, (socklen_t *) 0);
+			if (msgsock == -1 )
+				perror("accept");
+			else {
+				if ( fork() == 0) {
+					close(sock);
+					connectionService(msgsock, dbase); //obsluga polaczenia
+					close(msgsock);
+					exit(0);
+				}
+				close(msgsock);
+			}
+
 		}
 	} while (1);
 	return 0;
 }
 
 
-int Server::adminAuthentication(int msgsock) {
+int Server::adminAuthentication(int msgsock, Database dbase) {
 	bool loginb = false;
 	bool passwdb = false;
 	char login[1024];
@@ -146,7 +192,7 @@ int Server::adminAuthentication(int msgsock) {
 
 		printf("-->%d: Password: %s\n", msgsock, passwd);
 
-		if ((result = isLogPwdCorrect(login, passwd)) == 0)	{
+		if ((result = isLogPwdCorrect(login, passwd, dbase)) == 0)	{
 			loginb = true;
 			passwdb = true;
 		} else {
@@ -163,126 +209,55 @@ int Server::adminAuthentication(int msgsock) {
 }
 
 
-int Server::isLoginCorect(char* buf) {
-	if (strlen(buf) > LOGIN_LENGTH_MAX || strlen( buf) < LOGIN_LENGTH_MIN) //sprawdzamy dlugosc
+
+int Server::isLoginCorrect(char* buf, Database dbase) {
+	if (strlen(buf) > LOGIN_LENGTH_MAX || strlen(buf) < LOGIN_LENGTH_MIN) //sprawdzamy dlugosc
 		return 2;
-
-	database = mysql_connection_setup();
-	MYSQL_RES *res;
-	MYSQL_ROW row; //zmienne do obslugi wynikow
-
-	buf = strdup(buf); //przygotowanie query
-	char sql_query[1024] = "SELECT * FROM ADMINS WHERE login = '";
-	strcat(sql_query, buf);
-	char *end = strdup("';");
-	strcat(sql_query, end);
-
-	mysql_query(database, sql_query);  //wykonanie query i pobranie wyniku
-	res = mysql_use_result(database);
-	row = mysql_fetch_row(res);
-
-	if (row == NULL) return 1; //czyli po prostu jeszcze nie ma takiego loginu w bazie
-	else return 0;
+	return dbase.baseIsLoginCorrect(buf);
 }
 
-int Server::isPasswdCorect(char* buf) {
-	if (strlen(buf) > PASSWD_LENGTH_MAX || strlen( buf) < PASSWD_LENGTH_MIN)
+
+
+int Server::isPasswdCorrect(char* buf) {
+	if (strlen(buf) > PASSWD_LENGTH_MAX || strlen(buf) < PASSWD_LENGTH_MIN)
 		return 1;
 	return 0;
 }
 
-int Server::isLogPwdCorrect(char* login, char* passwd) {
-	database = mysql_connection_setup();
-	MYSQL_RES *res;
-	MYSQL_ROW  row;
 
-	//ustawiamy query
-	char sql_query[1024] = "SELECT * FROM ADMINS WHERE login = '";//  ';INSERT INTO ADMINS (login, passwd) VALUES ('adminek', 'adminek');
-	login = strdup(login);
-	passwd = strdup(passwd);
-	strcat(sql_query, login);
-	char *end = strdup("' AND passwd = '");
-	strcat(sql_query, end);
-	strcat(sql_query, passwd);
-	char *end2 = strdup("';");
-	strcat(sql_query, end2);
 
-	mysql_query(database, sql_query); //wykonanie query i pobranie wyniku
-	res = mysql_use_result(database);
-	row = mysql_fetch_row(res);
-
-	if (row == NULL) return 2; //jesli nie ma takiego wiersza w bazie, to login lub haslo niepoprawne
-	else return 0;
+int Server::isLogPwdCorrect(char* login, char* passwd, Database dbase) {
+	return dbase.baseIsLogPwdCorrect(login, passwd);
 }
 
-int Server::isIdCardCorrect(char* buf) {
-	if (strlen(buf) > LOGIN_LENGTH_MAX || strlen( buf) < LOGIN_LENGTH_MIN)
+
+
+int Server::isIdCardCorrect(char* buf, Database dbase) {
+	if (strlen(buf) > LOGIN_LENGTH_MAX || strlen(buf) < LOGIN_LENGTH_MIN)
 		return 2;
-	database = mysql_connection_setup();
-	MYSQL_RES *res;
-	MYSQL_ROW  row;
-	char sql_query[1024] = "SELECT * FROM CARDS WHERE id = '";
-	buf = strdup(buf);
-	strcat(sql_query, buf);
-
-	char *end2 = strdup("';");
-	strcat(sql_query, end2);
-
-	mysql_query(database, sql_query);
-	res = mysql_use_result(database);
-	row = mysql_fetch_row(res);
-
-	if (row == NULL) return 1; //czyli po prostu jeszcze nie ma takiego loginu w bazie
-	else return 0;
+	return dbase.baseIsIdCardCorrect(buf);
 }
 
-int Server::isUserCodeCorrect(char* buf) {
-	if (strlen(buf) > LOGIN_LENGTH_MAX || strlen( buf) < LOGIN_LENGTH_MIN)
+
+
+int Server::isUserCodeCorrect(char* buf, Database dbase) {
+	if (strlen(buf) > LOGIN_LENGTH_MAX || strlen(buf) < LOGIN_LENGTH_MIN)
 		return 2;
-	database = mysql_connection_setup();
-	MYSQL_RES *res;
-	MYSQL_ROW  row;
-	char sql_query[1024] = "SELECT * FROM CARDS WHERE user_code = '";
-	buf = strdup(buf);
-	strcat(sql_query, buf);
-
-	char *end2 = strdup("';");
-	strcat(sql_query, end2);
-
-	mysql_query(database, sql_query);
-	res = mysql_use_result(database);
-	row = mysql_fetch_row(res);
-
-	if (row == NULL) return 1; //czyli po prostu jeszcze nie ma takiego loginu w bazie
-	else return 0;
+	return dbase.baseIsUserCodeCorrect(buf);
 }
 
-int Server::isUserFingerCorrect(char* buf) {
-	if (strlen(buf) > LOGIN_LENGTH_MAX || strlen( buf) < LOGIN_LENGTH_MIN)
+
+
+int Server::isUserFingerCorrect(char* buf, Database dbase) {
+	if (strlen(buf) > LOGIN_LENGTH_MAX || strlen(buf) < LOGIN_LENGTH_MIN)
 		return 2;
-	database = mysql_connection_setup();
-	MYSQL_RES *res;
-	MYSQL_ROW  row;
-	char sql_query[1024] = "SELECT * FROM CARDS WHERE finger_prt = '";
-	buf = strdup(buf);
-	strcat(sql_query, buf);
-
-	char *end2 = strdup("';");
-	strcat(sql_query, end2);
-
-	mysql_query(database, sql_query);
-	res = mysql_use_result(database);
-	row = mysql_fetch_row(res);
-
-	if (row == NULL) return 1; //czyli po prostu jeszcze nie ma takiego loginu w bazie
-	else return 0;
+	return dbase.baseIsUserFingerCorrect(buf);
 }
 
 
 
-
-void Server::connectionService(int msgsock) {
-	int Auth = adminAuthentication(msgsock);
+void Server::connectionService(int msgsock, Database dbase) {
+	int Auth = adminAuthentication(msgsock, dbase);
 	if (Auth == 0) {
 		cout << "Socket authenticated" << endl;
 	}
@@ -307,22 +282,22 @@ void Server::connectionService(int msgsock) {
 		case 'c':
 			cout << "\nCreating account" << endl;
 			write(msgsock, C, strlen(C));
-			createAccount(msgsock);
+			createAccount(msgsock, dbase);
 			break;
 		case 'C':
 			cout << "\nDeleting account" << endl;
 			write(msgsock, CC, strlen(CC));
-			deleteAccount(msgsock);
+			deleteAccount(msgsock, dbase);
 			break;
 		case 'a':
 			cout << "\nAdding Card" << endl;
 			write(msgsock, A, strlen(A));
-			addCard(msgsock);
+			addCard(msgsock, dbase);
 			break;
 		case 'A':
 			cout << "Deleting Card" << endl;
 			write(msgsock, AA, strlen(AA));
-			deleteCard(msgsock);
+			deleteCard(msgsock, dbase);
 			break;
 		default:
 			cout << "Wrong option choosen" << endl;
@@ -332,7 +307,9 @@ void Server::connectionService(int msgsock) {
 	cout << "BYE CONNECTION: " << msgsock << endl;
 }
 
-void Server::createAccount(int msgsock) {
+
+
+void Server::createAccount(int msgsock, Database dbase) {
 	int loginb = 0;
 	int passwdb = 0;
 	char login[1024];
@@ -359,8 +336,8 @@ void Server::createAccount(int msgsock) {
 
 	printf("-->%d: %s\n", msgsock, passwd);
 
-	loginb = isLoginCorect(login);
-	passwdb = isPasswdCorect(passwd);
+	loginb = isLoginCorrect(login, dbase);
+	passwdb = isPasswdCorrect(passwd);
 
 	if (loginb == 0) {
 		write(msgsock, ERRLOG, strlen(ERRLOG));
@@ -370,19 +347,8 @@ void Server::createAccount(int msgsock) {
 		write(msgsock, ERRPASS, strlen(ERRPASS));
 		return;
 	}
-/////////////////////
-	database = mysql_connection_setup();
-	char sql_query[1024] = "INSERT INTO ADMINS (login, passwd) VALUES ('"; //ustawiamy query
-	strcat(sql_query, login);
-	char *end = strdup("', '");
-	strcat(sql_query, end);
-	strcat(sql_query, passwd);
-	char *end2 = strdup("');");
-	strcat(sql_query, end2);
 
-	mysql_query(database, sql_query); //wykonanie query
-
-/////////////////////
+	dbase.baseCreateAccount(login, passwd);
 
 	write(msgsock, AUTH, strlen(AUTH));
 	cout << "New account created!" << endl;
@@ -390,7 +356,9 @@ void Server::createAccount(int msgsock) {
 	return;
 }
 
-void Server::deleteAccount(int msgsock) {
+
+
+void Server::deleteAccount(int msgsock, Database dbase) {
 	char login[1024];
 	int rval = 0;
 
@@ -405,23 +373,13 @@ void Server::deleteAccount(int msgsock) {
 	printf("-->%d: Login: %s\n", msgsock, login);
 
 
-	if (isLoginCorect(login)) {
+	if (isLoginCorrect(login, dbase)) {
 		cout << msgsock << ": " << ERRLOG << endl;
 		write(msgsock, ERRLOG, strlen(ERRLOG));
 		return;
 	}
 
-	//usuwanie konta z bazy
-/////////////////////
-	database = mysql_connection_setup();
-	char sql_query[1024] = "DELETE FROM ADMINS WHERE login = '"; //ustawiamy query
-	strcat(sql_query, login);
-	char *end2 = strdup("';");
-	strcat(sql_query, end2);
-
-	mysql_query(database, sql_query); //wykonanie query
-
-/////////////////////
+	dbase.baseDeleteAccount(login);
 
 	write(msgsock, AUTH, strlen(AUTH));
 	cout << "Account deleted" << endl;
@@ -429,7 +387,9 @@ void Server::deleteAccount(int msgsock) {
 	return;
 }
 
-void Server::addCard(int msgsock) {
+
+
+void Server::addCard(int msgsock, Database dbase) {
 	int idCardb = 0;
 	int userCodeb = 0;
 	int userFingerb = 0;
@@ -469,9 +429,9 @@ void Server::addCard(int msgsock) {
 
 	printf("-->%d: %s\n", msgsock, userFinger);
 
-	idCardb = isIdCardCorrect(idCard);
-	userCodeb = isUserCodeCorrect(userCode);
-	userFingerb = isUserFingerCorrect(userFinger);
+	idCardb = isIdCardCorrect(idCard, dbase);
+	userCodeb = isUserCodeCorrect(userCode, dbase);
+	userFingerb = isUserFingerCorrect(userFinger, dbase);
 
 	if (idCardb == 0 || idCardb == 2) {
 		cout << msgsock << ": " << ERRID << endl;
@@ -489,24 +449,7 @@ void Server::addCard(int msgsock) {
 		return;
 	}
 
-
-///////////////////////////
-	database = mysql_connection_setup();
-	char sql_query[1024] = "INSERT INTO CARDS (id, user_code, finger_prt, passwd) VALUES ('";
-	strcat(sql_query, idCard);
-	char *end = strdup("', '");
-	strcat(sql_query, end);
-	strcat(sql_query, userCode);
-	strcat(sql_query, end);
-	strcat(sql_query, userFinger);
-	strcat(sql_query, end);
-	char *end3 = strdup("stdpasswd");
-	strcat(sql_query, end3);
-	char *end2 = strdup("');");
-	strcat(sql_query, end2);
-
-	mysql_query(database, sql_query);
-///////////////////////////
+	dbase.baseAddCard(idCard, userCode, userFinger);
 
 	cout << "New card added!" << endl;
 
@@ -514,7 +457,9 @@ void Server::addCard(int msgsock) {
 	return;
 }
 
-void Server::deleteCard(int msgsock) {
+
+
+void Server::deleteCard(int msgsock, Database dbase) {
 	char idCard[1024];
 	int rval = 0;
 
@@ -528,22 +473,13 @@ void Server::deleteCard(int msgsock) {
 
 	printf("-->%d: %s\n", msgsock, idCard);
 
-	if (isIdCardCorrect(idCard)) {
+	if (isIdCardCorrect(idCard, dbase)) {
 		cout << msgsock << ": " << ERRID << endl;
 		write(msgsock, ERRID, strlen(ERRID));
 		return;
 	}
 
-	//usuwanie karty z bazy
-/////////////////////
-	database = mysql_connection_setup();
-	char sql_query[1024] = "DELETE FROM CARDS WHERE id = '"; //ustawiamy query
-	strcat(sql_query, idCard);
-	char *end2 = strdup("';");
-	strcat(sql_query, end2);
-
-	mysql_query(database, sql_query); //wykonanie query
-/////////////////////
+	dbase.baseDeleteCard(idCard);
 
 	cout << "Card deleted" << endl;
 	write(msgsock, AUTH, strlen(AUTH));
