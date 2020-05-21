@@ -24,4 +24,5 @@ class Database {
 	void baseDeleteAccount(char* login);
 	void baseAddCard(char* idCard, char* userCode, char* userFinger);
 	void baseDeleteCard(char* idCard);
+	void baseSetAccessRights(char* idCard, char* priority);
 };

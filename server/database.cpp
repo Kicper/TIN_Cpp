@@ -166,7 +166,7 @@ void Database::baseDeleteAccount(char* login) {
 
 void Database::baseAddCard(char* idCard, char* userCode, char* userFinger) {
 	database = mysql_connection_setup();
-	char sql_query[1024] = "INSERT INTO CARDS (id, user_code, finger_prt, passwd) VALUES ('";
+	char sql_query[1024] = "INSERT INTO CARDS (id, user_code, finger_prt, priority) VALUES ('";
 	strcat(sql_query, idCard);
 	char *end = strdup("', '");
 	strcat(sql_query, end);
@@ -174,7 +174,7 @@ void Database::baseAddCard(char* idCard, char* userCode, char* userFinger) {
 	strcat(sql_query, end);
 	strcat(sql_query, userFinger);
 	strcat(sql_query, end);
-	char *end3 = strdup("stdpasswd");
+	char *end3 = strdup("0");
 	strcat(sql_query, end3);
 	char *end2 = strdup("');");
 	strcat(sql_query, end2);
@@ -192,4 +192,20 @@ void Database::baseDeleteCard(char* idCard) {
 	strcat(sql_query, end2);
 
 	mysql_query(database, sql_query); //wykonanie query
+}
+
+
+
+void Database::baseSetAccessRights(char* idCard, char* priority) {
+	database = mysql_connection_setup();
+    char sql_query[1024] = "UPDATE CARDS SET priority = '"; //ustawiamy query
+    strcat(sql_query, priority);
+
+    char *end2 = strdup("' WHERE id = '");
+    strcat(sql_query, end2);
+    strcat(sql_query, idCard);
+    char *end = strdup("';");
+	strcat(sql_query, end);
+
+    mysql_query(database, sql_query); //wykonanie query
 }

@@ -21,7 +21,9 @@ int main()
 		cout<<"\n2. Delete account.";
 		cout<<"\n3. Add card.";
 		cout<<"\n4. Delete card.";
-		cout<<"\n5. Log out.";
+		cout<<"\n5. Set card's access rights.";
+		cout<<"\n6. Broadcast cards to drivers.";
+		cout<<"\n7. Log out.";
 		cout<<"\nEnter which action you want to choose: ";
 		cin>>input;
 		system("clear");
@@ -47,11 +49,21 @@ int main()
 				cout<<"\n";
 				break;
 			case '5':
+				cout<<"\n";
+				admin.setAccessRights(adminSocket);
+				cout<<"\n";
+				break;
+			case '6':
+				cout<<"\n";
+				admin.broadcastCards(adminSocket);
+				cout<<"\n";
+				break;
+			case '7':
 				cout<<"\n\n";
 				break;
 			default:
 				cout<<"\nYou entered wrong command!\n.";
 		}
-	} while (input!='5');
+	} while (input!='7');
 	return 0;
 }

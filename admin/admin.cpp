@@ -18,7 +18,6 @@ string Admin::writeLogin() {
 
 
 
-
 string Admin::writePassword() {
     string write_password;
     cout<<"\nEnter password: ";
@@ -150,6 +149,52 @@ void Admin::deleteCard(AdminSocket adminSocket) {
 		cout<<"\nThis method is not handled by server. Try another operation...";
 	} else if (result == 2) {
 		cout<<"\nCard's ID doesn't exist so you can't delete it. Try again...";
+	} else {
+		cout<<"\nOperation failed.";
+	}
+	return;
+}
+
+
+
+void Admin::setAccessRights(AdminSocket adminSocket) {
+	int result;
+	string ID_card, priority;
+
+	cout<<"\nEnter card's ID: ";
+	cin>>ID_card;
+	cout<<"\nEnter level of access rights for above card: ";
+	cin>>priority;
+
+	result = adminSocket.connectSetAccessRights(ID_card, priority);
+    if (result == 0) {
+		cout<<"\nSuccesfully set card's access rights! Choose another operation:";
+	} else if (result == 1) {
+		cout<<"\nThis method is not handled by server. Try another operation...";
+	} else if (result == 2) {
+		cout<<"\nCard's ID doesn't exist so you can't set its access rights. Try again...";
+	} else if (result == 3) {
+		cout<<"\nLevel of access rights is incorrect. Try again...";
+	} else {
+		cout<<"\nOperation failed.";
+	}
+	return;
+}
+
+
+
+void Admin::broadcastCards(AdminSocket adminSocket) {
+	int result;
+
+	result = adminSocket.connectBroadcastCards();
+    if (result == 0) {
+		cout<<"\nSuccesfully broadcasted cards! Choose another operation:";
+	} else if (result == 1) {
+		cout<<"\nThis method is not handled by server. Try another operation...";
+	} else if (result == 2) {
+		cout<<"\nThere is problem with connection to one of drivers. Try again...";
+	} else if (result == 3) {
+		cout<<"\nOne of drivers didn't confirm recieved changes. Try again...";
 	} else {
 		cout<<"\nOperation failed.";
 	}

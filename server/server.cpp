@@ -19,11 +19,13 @@
 #define ERRID "idCard"
 #define ERRCODE "code"
 #define ERRFINGER "finger"
+#define ERRLEVEL "levelOfPriority"
 
 #define C "c"
 #define A "a"
 #define CC "C"
 #define AA "A"
+#define S "s"
 
 #define ERR "error"
 
@@ -256,6 +258,14 @@ int Server::isUserFingerCorrect(char* buf, Database dbase) {
 
 
 
+int Server::isPriorityCorrect(char* buf) {
+	if (stoi(buf) < 0 || 5 < stoi(buf))
+		return 1;
+	return 0;
+}
+
+
+
 void Server::connectionService(int msgsock, Database dbase) {
 	int Auth = adminAuthentication(msgsock, dbase);
 	if (Auth == 0) {
@@ -298,6 +308,11 @@ void Server::connectionService(int msgsock, Database dbase) {
 			cout << "Deleting Card" << endl;
 			write(msgsock, AA, strlen(AA));
 			deleteCard(msgsock, dbase);
+			break;
+		case 's':
+			cout << "Set Access Rights" << endl;
+			write(msgsock, S, strlen(S));
+			setAccessRights(msgsock, dbase);
 			break;
 		default:
 			cout << "Wrong option choosen" << endl;
@@ -484,5 +499,57 @@ void Server::deleteCard(int msgsock, Database dbase) {
 	cout << "Card deleted" << endl;
 	write(msgsock, AUTH, strlen(AUTH));
 
+	return;
+}
+
+
+
+void Server::setAccessRights(int msgsock, Database dbase) {
+	int idCardb = 0;
+	int priorityb = 0;
+
+	char idCard[1024];
+	char priority[1024];
+	int rval = 0;
+
+	memset(idCard, 0, sizeof idCard); // wczytanie oraz weryfikacja poprawnosci ID karty
+	if ((rval = read(msgsock, idCard, 1024)) == -1)
+		perror("reading stream message");
+	if (rval == 0) {
+		cout << "Connection ended while adding ID Card" << endl;
+		exit(0);
+	}
+
+	printf("-->%d: %s\n", msgsock, idCard);
+
+	memset(priority, 0, sizeof priority); // wczytanie oraz weryfikacja poprawnosci kodu pracownika
+	if (read(msgsock, priority, 1024) == -1)
+		perror("reading stream message");
+	if (rval == 0) {
+		cout << "Connection ended while adding level of access rights" << endl;
+		exit(0);
+	}
+
+	printf("-->%d: %s\n", msgsock, priority);
+
+	idCardb = isIdCardCorrect(idCard, dbase);
+	priorityb = isPriorityCorrect(priority);
+
+	if (idCardb == 1 || idCardb == 2) {
+		cout << msgsock << ": " << ERRID << endl;
+		write(msgsock, ERRID, strlen(ERRID));
+		return;
+	}
+	else if (priorityb == 1) {
+		cout << msgsock << ": " << ERRLEVEL << endl;
+		write(msgsock, ERRLEVEL, strlen(ERRLEVEL));
+		return;
+	}
+
+	dbase.baseSetAccessRights(idCard, priority);
+
+	cout << "New access rights set!" << endl;
+
+	write(msgsock, AUTH, strlen(AUTH));
 	return;
 }

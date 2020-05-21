@@ -13,4 +13,6 @@ class AdminSocket {
 	int connectDeleteAccount(string login);
 	int connectAddCard(string ID_card, string user_code, string scanned_finger);
 	int connectDeleteCard(string login);
+	int connectSetAccessRights(string ID_card, string priority);
+	int connectBroadcastCards();
 };
