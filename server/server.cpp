@@ -20,12 +20,14 @@
 #define ERRCODE "code"
 #define ERRFINGER "finger"
 #define ERRLEVEL "levelOfPriority"
+#define ERRIDDRIVER "idDriver"
 
 #define C "c"
 #define A "a"
 #define CC "C"
 #define AA "A"
 #define S "s"
+#define D "d"
 
 #define ERR "error"
 
@@ -149,7 +151,7 @@ int Server::runServer(Database dbase) {
 			else {
 				if ( fork() == 0) {
 					close(sock);
-					connectionService(msgsock, dbase); //obsluga polaczenia
+					connectionDriver(msgsock, dbase); //obsluga polaczenia
 					close(msgsock);
 					exit(0);
 				}
@@ -160,6 +162,7 @@ int Server::runServer(Database dbase) {
 	} while (1);
 	return 0;
 }
+
 
 
 int Server::adminAuthentication(int msgsock, Database dbase) {
@@ -212,6 +215,56 @@ int Server::adminAuthentication(int msgsock, Database dbase) {
 
 
 
+int Server::driverAuthentication(int msgsock, Database dbase) {
+	bool idDriverb = false;
+	bool passwdb = false;
+	char idDriver[1024];
+	char passwd[1024];
+	int rval = 0;
+	int result = -1;
+
+	do { // weryfikacja loginu oraz hasla (podawane "do skutku")
+		idDriverb = false;
+		passwdb = false;
+
+		memset(idDriver, 0, sizeof idDriver);
+		if ((rval = read(msgsock, idDriver, 1024)) == -1)
+			perror("reading stream message");
+		if (rval == 0) {
+			cout << "Connection ended while driver's ID authentication" << endl;
+			exit(0);
+		}
+
+		printf("-->%d: Driver's ID: %s\n", msgsock, idDriver);
+
+		memset(passwd, 0, sizeof passwd);
+		if ((rval = read(msgsock, passwd, 1024)) == -1)
+			perror("reading stream message");
+		if (rval == 0) {
+			cout << "Connection ended while password authentication" << endl;
+			exit(0);
+		}
+
+		printf("-->%d: Password: %s\n", msgsock, passwd);
+
+		if ((result = isIdPwdCorrect(idDriver, passwd, dbase)) == 0)	{
+			idDriverb = true;
+			passwdb = true;
+		} else {
+			idDriverb = false;
+		}
+
+		if (!idDriverb)
+			write(msgsock, ERRLOG, strlen(ERRLOG));
+
+	} while (!idDriverb || !passwdb);
+
+	write(msgsock, AUTH, strlen(AUTH));
+	return 0;
+}
+
+
+
 int Server::isLoginCorrect(char* buf, Database dbase) {
 	if (strlen(buf) > LOGIN_LENGTH_MAX || strlen(buf) < LOGIN_LENGTH_MIN) //sprawdzamy dlugosc
 		return 2;
@@ -230,6 +283,12 @@ int Server::isPasswdCorrect(char* buf) {
 
 int Server::isLogPwdCorrect(char* login, char* passwd, Database dbase) {
 	return dbase.baseIsLogPwdCorrect(login, passwd);
+}
+
+
+
+int Server::isIdPwdCorrect(char* idDriver, char* passwd, Database dbase) {
+	return dbase.baseIsIdPwdCorrect(idDriver, passwd);
 }
 
 
@@ -262,6 +321,14 @@ int Server::isPriorityCorrect(char* buf) {
 	if (stoi(buf) < 0 || 5 < stoi(buf))
 		return 1;
 	return 0;
+}
+
+
+
+int Server::isIdDriverCorrect(char* buf, Database dbase) {
+	if (strlen(buf) > LOGIN_LENGTH_MAX || strlen(buf) < LOGIN_LENGTH_MIN)
+		return 2;
+	return dbase.baseIsIdDriverCorrect(buf);
 }
 
 
@@ -305,18 +372,87 @@ void Server::connectionService(int msgsock, Database dbase) {
 			addCard(msgsock, dbase);
 			break;
 		case 'A':
-			cout << "Deleting Card" << endl;
+			cout << "\nDeleting Card" << endl;
 			write(msgsock, AA, strlen(AA));
 			deleteCard(msgsock, dbase);
 			break;
 		case 's':
-			cout << "Set Access Rights" << endl;
+			cout << "\nSet Access Rights" << endl;
 			write(msgsock, S, strlen(S));
 			setAccessRights(msgsock, dbase);
 			break;
+		case 'd':
+			cout << "\nAdding driver" << endl;
+			write(msgsock, D, strlen(D));
+			addDriver(msgsock, dbase);
+			break;
 		default:
-			cout << "Wrong option choosen" << endl;
+			cout << "\nWrong option choosen" << endl;
 			write(msgsock, ERR, strlen(ERR));
+		}
+	} while (1);
+	cout << "BYE CONNECTION: " << msgsock << endl;
+}
+
+
+
+void Server::connectionDriver(int msgsock, Database dbase) {
+	int Auth = driverAuthentication(msgsock, dbase);
+	if (Auth == 0) {
+		cout << "Socket authenticated" << endl;
+	}
+	else {
+		cout << "Driver authentication failed" << endl;
+		return;
+	}
+
+	char buf[1024];
+	int rval = 0;
+
+	do { // prawdziwa obsluga drivera, po uwierzytelnieniu
+		memset(buf, 0, sizeof buf);
+		if ((rval = read(msgsock, buf, 1024)) == -1)
+			perror("reading stream message");
+		if (rval == 0) {
+			cout << "Connection ended while choosing option" << endl;
+			break;
+		}
+
+		switch (buf[0]) {
+		/*
+		case 'c':
+			cout << "\nCreating account" << endl;
+			write(msgsock, C, strlen(C));
+			createAccount(msgsock, dbase);
+			break;
+		case 'C':
+			cout << "\nDeleting account" << endl;
+			write(msgsock, CC, strlen(CC));
+			deleteAccount(msgsock, dbase);
+			break;
+		case 'a':
+			cout << "\nAdding Card" << endl;
+			write(msgsock, A, strlen(A));
+			addCard(msgsock, dbase);
+			break;
+		case 'A':
+			cout << "\nDeleting Card" << endl;
+			write(msgsock, AA, strlen(AA));
+			deleteCard(msgsock, dbase);
+			break;
+		case 's':
+			cout << "\nSet Access Rights" << endl;
+			write(msgsock, S, strlen(S));
+			setAccessRights(msgsock, dbase);
+			break;
+		case 'd':
+			cout << "\nAdding driver" << endl;
+			write(msgsock, D, strlen(D));
+			addDriver(msgsock, dbase);
+			break;
+		default:
+			cout << "\nWrong option choosen" << endl;
+			write(msgsock, ERR, strlen(ERR));*/
 		}
 	} while (1);
 	cout << "BYE CONNECTION: " << msgsock << endl;
@@ -468,7 +604,7 @@ void Server::addCard(int msgsock, Database dbase) {
 
 	cout << "New card added!" << endl;
 
-	if (idCardb && userCodeb && userFingerb) write(msgsock, AUTH, strlen(AUTH));
+	write(msgsock, AUTH, strlen(AUTH));
 	return;
 }
 
@@ -522,7 +658,7 @@ void Server::setAccessRights(int msgsock, Database dbase) {
 
 	printf("-->%d: %s\n", msgsock, idCard);
 
-	memset(priority, 0, sizeof priority); // wczytanie oraz weryfikacja poprawnosci kodu pracownika
+	memset(priority, 0, sizeof priority); // wczytanie oraz weryfikacja poprawnosci priorytetu
 	if (read(msgsock, priority, 1024) == -1)
 		perror("reading stream message");
 	if (rval == 0) {
@@ -553,3 +689,121 @@ void Server::setAccessRights(int msgsock, Database dbase) {
 	write(msgsock, AUTH, strlen(AUTH));
 	return;
 }
+
+
+
+void Server::addDriver(int msgsock, class Database dbase) {
+	int idDriverb = 0;
+	int passwdb = 0;
+	int priorityb = 0;
+
+	char idDriver[1024];
+	char passwd[1024];
+	char priority[1024];
+	int rval = 0;
+
+	memset(idDriver, 0, sizeof idDriver); // wczytanie oraz weryfikacja poprawnosci ID sterownika
+	if ((rval = read(msgsock, idDriver, 1024)) == -1)
+		perror("reading stream message");
+	if (rval == 0) {
+		cout << "Connection ended while adding driver's ID" << endl;
+		exit(0);
+	}
+
+	printf("-->%d: %s\n", msgsock, idDriver);
+
+	memset(passwd, 0, sizeof passwd);	// wczytanie oraz weryfikacja poprawnosci hasła
+	if (read(msgsock, passwd, 1024) == -1)
+		perror("reading stream message");
+	if (rval == 0) {
+		cout << "Connection ended while adding password" << endl;
+		exit(0);
+	}
+
+	printf("-->%d: %s\n", msgsock, passwd);
+
+	memset(priority, 0, sizeof priority); // wczytanie oraz weryfikacja poprawnosci odcisku palca
+	if ((rval = read(msgsock, priority, 1024)) == -1)
+		perror("reading stream message");
+	if (rval == 0) {
+		cout << "Connection ended while adding priority" << endl;
+		exit(0);
+	}
+
+	printf("-->%d: %s\n", msgsock, priority);
+
+	idDriverb = isIdDriverCorrect(idDriver, dbase);
+	passwdb = isPasswdCorrect(passwd);
+	priorityb = isPriorityCorrect(priority);
+
+	if (idDriverb == 0) {
+		cout << msgsock << ": " << ERRIDDRIVER << endl;
+		write(msgsock, ERRIDDRIVER, strlen(ERRIDDRIVER));
+		return;
+	}
+	else if (idDriverb == 2 || passwdb == 1) {
+		cout << msgsock << ": " << ERRPASS << endl;
+		write(msgsock, ERRPASS, strlen(ERRPASS));
+		return;
+	}
+	else if (priorityb == 1) {
+		cout << msgsock << ": " << ERRLEVEL << endl;
+		write(msgsock, ERRLEVEL, strlen(ERRLEVEL));
+		return;
+	}
+
+	dbase.baseAddDriver(idDriver, passwd, priority);
+
+	cout << "New driver added!" << endl;
+
+	write(msgsock, AUTH, strlen(AUTH));
+	return;
+}
+
+
+
+/*
+void Server::addNewPlan()
+{
+	char plan[2048];
+	char passwd[1024];
+
+	memset(plan, 0, sizeof plan); // wczytywanie oraz weryfikacja loginu
+	if ((rval = read(msgsock, plan, 2048)) == -1)
+		perror("reading stream message");
+	if (rval == 0) {
+		cout << "Connection ended while adding new plan" << endl;
+		exit(0);
+	}
+
+	printf("-->%d: %s\n", msgsock, plan);
+
+	memset(passwd, 0, sizeof passwd); // wczytywanie oraz weryfikacja hasla
+	if (read(msgsock, passwd, 1024) == -1)
+		perror("reading stream message");
+	if (rval == 0) {
+		cout << "Connection ended while creating password" << endl;
+		exit(0);
+	} */
+
+	//printf("-->%d: %s\n", msgsock, passwd);
+
+//	loginb = isLoginCorrect(login, dbase);
+	//passwdb = isPasswdCorrect(passwd);
+/*
+	if (loginb == 0) {
+		write(msgsock, ERRLOG, strlen(ERRLOG));
+		return;
+	}
+	if (loginb == 2 || passwdb == 1) {
+		write(msgsock, ERRPASS, strlen(ERRPASS));
+		return;
+	} 
+
+	dbase.baseAddPlan(plan);
+
+	write(msgsock, AUTH, strlen(AUTH));
+	cout << "New added!" << endl;
+
+	return;
+} */

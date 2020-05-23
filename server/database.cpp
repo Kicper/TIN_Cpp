@@ -74,6 +74,32 @@ int Database::baseIsLogPwdCorrect(char* login, char* passwd) {
 
 
 
+int Database::baseIsIdPwdCorrect(char* idDriver, char* passwd) {
+	database = mysql_connection_setup();
+	MYSQL_RES *res;
+	MYSQL_ROW  row;
+
+	//ustawiamy query
+	char sql_query[1024] = "SELECT * FROM DRIVERS WHERE driver_id = '";
+	idDriver = strdup(idDriver);
+	passwd = strdup(passwd);
+	strcat(sql_query, idDriver);
+	char *end = strdup("' AND passwd = '");
+	strcat(sql_query, end);
+	strcat(sql_query, passwd);
+	char *end2 = strdup("';");
+	strcat(sql_query, end2);
+
+	mysql_query(database, sql_query); //wykonanie query i pobranie wyniku
+	res = mysql_use_result(database);
+	row = mysql_fetch_row(res);
+
+	if (row == NULL) return 2; //jesli nie ma takiego wiersza w bazie, to login lub haslo niepoprawne
+	else return 0;
+}
+
+
+
 int Database::baseIsIdCardCorrect(char* buf) {
 	database = mysql_connection_setup();
 	MYSQL_RES *res;
@@ -133,6 +159,27 @@ int Database::baseIsUserFingerCorrect(char* buf) {
 
     if (row == NULL) return 1; //czyli po prostu jeszcze nie ma takiego loginu w bazie
     else return 0;
+}
+
+
+
+int Database::baseIsIdDriverCorrect(char* buf) {
+	database = mysql_connection_setup();
+	MYSQL_RES *res;
+	MYSQL_ROW row; //zmienne do obslugi wynikow
+
+	buf = strdup(buf); //przygotowanie query
+	char sql_query[1024] = "SELECT * FROM DRIVERS WHERE driver_id = '";
+	strcat(sql_query, buf);
+	char *end = strdup("';");
+	strcat(sql_query, end);
+
+	mysql_query(database, sql_query);  //wykonanie query i pobranie wyniku
+	res = mysql_use_result(database);
+	row = mysql_fetch_row(res);
+
+	if (row == NULL) return 1; //czyli po prostu jeszcze nie ma takiego loginu w bazie
+	else return 0;
 }
 
 
@@ -208,4 +255,21 @@ void Database::baseSetAccessRights(char* idCard, char* priority) {
 	strcat(sql_query, end);
 
     mysql_query(database, sql_query); //wykonanie query
+}
+
+
+
+void Database::baseAddDriver(char* idDriver, char* passwd, char* priority) {
+	database = mysql_connection_setup();
+	char sql_query[1024] = "INSERT INTO DRIVERS (driver_id, passwd, priority) VALUES ('";
+	strcat(sql_query, idDriver);
+	char *end = strdup("', '");
+	strcat(sql_query, end);
+	strcat(sql_query, passwd);
+	strcat(sql_query, end);
+	strcat(sql_query, priority);
+	char *end2 = strdup("');");
+	strcat(sql_query, end2);
+
+	mysql_query(database, sql_query);
 }
