@@ -14,5 +14,6 @@ class AdminSocket {
 	int connectAddCard(string ID_card, string user_code, string scanned_finger);
 	int connectDeleteCard(string login);
 	int connectSetAccessRights(string ID_card, string priority);
+	int connectAddDriver(string ID_driver, string pass_driver, string priority);
 	int connectBroadcastCards();
 };

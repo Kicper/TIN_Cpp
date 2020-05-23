@@ -10,7 +10,7 @@ int main()
 {
 	Admin admin;
 	AdminSocket adminSocket;
-	bool correct_connection = admin.logIn(&adminSocket);		// dopisać zabezpieczenie gdy serwer nie jest jeszcze włączony
+	bool correct_connection = admin.logIn(&adminSocket);
 	if (correct_connection == false) {
 		cout<<"\nThere is probably problem on the server's site.\n\n";
 		return 0;
@@ -22,8 +22,9 @@ int main()
 		cout<<"\n3. Add card.";
 		cout<<"\n4. Delete card.";
 		cout<<"\n5. Set card's access rights.";
-		cout<<"\n6. Broadcast cards to drivers.";
-		cout<<"\n7. Log out.";
+		cout<<"\n6. Add driver.";
+		cout<<"\n7. Broadcast cards to drivers.";
+		cout<<"\n8. Log out.";
 		cout<<"\nEnter which action you want to choose: ";
 		cin>>input;
 		system("clear");
@@ -55,15 +56,20 @@ int main()
 				break;
 			case '6':
 				cout<<"\n";
-				admin.broadcastCards(adminSocket);
+				admin.addDriver(adminSocket);
 				cout<<"\n";
 				break;
 			case '7':
+				cout<<"\n";
+				admin.broadcastCards(adminSocket);
+				cout<<"\n";
+				break;
+			case '8':
 				cout<<"\n\n";
 				break;
 			default:
 				cout<<"\nYou entered wrong command!\n.";
 		}
-	} while (input!='7');
+	} while (input!='8');
 	return 0;
 }

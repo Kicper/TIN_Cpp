@@ -183,6 +183,36 @@ void Admin::setAccessRights(AdminSocket adminSocket) {
 
 
 
+void Admin::addDriver(AdminSocket adminSocket) {
+	int result;
+	string ID_driver, pass_driver, priority;
+
+	cout<<"\nEnter drivers's ID: ";
+	cin>>ID_driver;
+	cout<<"\nEnter password to new driver: ";
+	cin>>pass_driver;
+	cout<<"\nEnter priority of new driver: ";
+	cin>>priority;
+
+	result = adminSocket.connectAddDriver(ID_driver, pass_driver, priority);
+    if (result == 0) {
+		cout<<"\nSuccesfully added new driver! Choose another operation:";
+	} else if (result == 1) {
+		cout<<"\nThis method is not handled by server. Try another operation...";
+	} else if (result == 2) {
+		cout<<"\nDriver's ID already exists so you can't add it. Try again...";
+	} else if (result == 3) {
+		cout<<"\nDriver's ID or password does not fit to requirements. Try again...";
+	} else if (result == 4) {
+		cout<<"\nPriority of new driver is incorrect. Try again...";
+	} else {
+		cout<<"\nOperation failed.";
+	}
+	return;
+}
+
+
+
 void Admin::broadcastCards(AdminSocket adminSocket) {
 	int result;
 

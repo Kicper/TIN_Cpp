@@ -241,6 +241,48 @@ int AdminSocket::connectSetAccessRights(string ID_card, string priority) {
 
 
 
+int AdminSocket::connectAddDriver(string ID_driver, string pass_driver, string priority) {
+
+	string method = "d";
+	int m = method.length(), i = ID_driver.length(), pass = pass_driver.length(), p = priority.length();
+	char method_arr[m+1], ID_driver_arr[i+1], pass_driver_arr[pass+1], priority_arr[p+1], received[1024] = {0};
+
+	strcpy(method_arr, method.c_str());
+	strcpy(ID_driver_arr, ID_driver.c_str());
+	strcpy(pass_driver_arr, pass_driver.c_str());
+	strcpy(priority_arr, priority.c_str());
+
+
+	send(sock_fd, method_arr, strlen(method_arr), 0);
+	read(sock_fd, received, 1024);
+	if (received[0] != 'd') {    // metoda nie istnieje
+		return 1;
+	}
+
+	send(sock_fd, ID_driver_arr, strlen(ID_driver_arr), 0);
+	usleep(100000);
+	send(sock_fd, pass_driver_arr, strlen(pass_driver_arr), 0);
+	usleep(100000);
+	send(sock_fd, priority_arr, strlen(priority_arr), 0);
+	read(sock_fd, received, 1024);
+	if (received[0] == 'A') {    // wszystko poprawnie
+		return 0;
+	}
+	if (received[0] == 'i') {    // jeśli numer ID sterownika istnieje to zwróć błąd
+		return 2;
+	}
+	if (received[0] == 'p') {    // jeśli ID lub hasło są błędne
+		return 3;
+	}
+	if (received[0] == 'l') {    // poziomu dostępu jest poza zakresem
+		return 4;
+	}
+
+	return -1;
+}
+
+
+
 int AdminSocket::connectBroadcastCards() {
 
 	string method = "b";

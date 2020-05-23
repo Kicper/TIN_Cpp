@@ -13,5 +13,6 @@ class Admin {
     void addCard(class AdminSocket adminSocket);
 	void deleteCard(class AdminSocket adminSocket);
 	void setAccessRights(class AdminSocket adminSocket);
+	void addDriver(class AdminSocket adminSocket);
 	void broadcastCards(class AdminSocket adminSocket);
 };
