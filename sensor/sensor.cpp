@@ -12,7 +12,7 @@
 
 #include "sensor.h"
 
-#define REPORT "report"
+#define SIMULATE "simulate"
 #define TRUE_DOOR "true"
 #define FALSE_DOOR "false"
 
@@ -25,7 +25,7 @@ MYSQL* Sensor::mysql_connection_drivers() {
 	struct connection_details mysqlD;
 	mysqlD.server = strdup("localhost");  // where the mysql database is
 	mysqlD.user = strdup("root");     // the root user of mysql
-	mysqlD.password = strdup("watykan1"); // the password of the root user in mysql
+	mysqlD.password = strdup("root"); // the password of the root user in mysql
 	mysqlD.database = strdup("STEROWNIKI"); // the databse to pick
 	if (!mysql_real_connect(connection, mysqlD.server, mysqlD.user, mysqlD.password, mysqlD.database, 0, NULL, 0))
 	{
@@ -58,6 +58,122 @@ int Sensor::sensor_connect() {
 	return 0;
 };
 
+void Sensor::sensor_broadcast() {
+	close(sock_fd);
+
+	struct sockaddr_in sensor2; //polaczenie dla broadcastu
+	int sock2 = socket(AF_INET, SOCK_STREAM, 0);
+	if (sock2 < 0) {
+		cout << "\nSocket calls error. :(";
+		return;
+	}
+	sensor2.sin_family = AF_INET;
+	sensor2.sin_port = htons(PORT);
+
+	if (inet_pton(AF_INET, "127.0.0.1", &sensor2.sin_addr) <= 0) {
+		cout << "\nAddress is invalid or not supported. :(\n";
+		return;
+	}
+	if (connect(sock2, (struct sockaddr *)&sensor2, sizeof(sensor2)) < 0) {
+		cout << "\nConnection failed. :(\n";
+		return;
+	}
+
+	sock_broadcast = sock2;
+}
+
+int Sensor::broadcastService() {
+
+	char received[1024] = {0};
+	//char recvlevel[1024] = {0};
+
+	string method = "b", result = "A";
+	int b = method.length(), r = result.length();
+	char method_arr[b + 1], result_arr[r + 1];
+
+	strcpy(method_arr, method.c_str());
+	strcpy(result_arr, result.c_str());
+
+	database = mysql_connection_drivers();
+
+	char char_array[1024];
+	char *end = strdup("', '");
+	char *end2 = strdup("');");
+	char *end3 = strdup("';");
+
+	int number = 0;
+
+	char card_id_arr[1024], user_code_arr[1024], finger_prt_arr[1024], priority_arr[1024];
+
+	char sql_query_2[1024] = "DELETE FROM DRIVERS WHERE driver_id = '";	// usunięcie z tabeli rekordów z o podanym ID sterownika
+	strcpy(char_array, sensorId.c_str());
+	strcat(sql_query_2, char_array);
+	strcat(sql_query_2, end3);
+
+	do {
+
+		mysql_query(database, sql_query_2);
+
+		send(sock_broadcast, method_arr, strlen(method_arr), 0);
+		read(sock_broadcast, received, 1024);
+		if (received[0] != 'b') {    // metoda nie istnieje
+			return 1;
+		}
+
+
+		read(sock_broadcast, received, 1024);
+		number = stoi(received);
+
+		for (int i = 0; i < number; ++i) {			// dodanie do tabeli rekordów z serwera o podanym ID sterownika
+			memset(card_id_arr, 0, sizeof card_id_arr);
+			memset(user_code_arr, 0, sizeof user_code_arr);
+			memset(finger_prt_arr, 0, sizeof finger_prt_arr);
+			memset(priority_arr, 0, sizeof priority_arr);
+
+			read(sock_broadcast, card_id_arr, 1024);
+
+			read(sock_broadcast, user_code_arr, 1024);
+
+			read(sock_broadcast, finger_prt_arr, 1024);
+
+			read(sock_broadcast, priority_arr, 1024);
+
+			char sql_query[1024] = "INSERT INTO DRIVERS (driver_id, driver_priority, card_id, user_code, finger_prt, priority) VALUES ('";
+			strcpy(char_array, sensorId.c_str());
+			strcat(sql_query, char_array);
+
+			strcat(sql_query, end);
+			strcpy(char_array, sensorLevel.c_str());
+			strcat(sql_query, char_array);
+
+			strcat(sql_query, end);
+			strcpy(char_array, card_id_arr);
+			strcat(sql_query, char_array);
+
+			strcat(sql_query, end);
+			strcpy(char_array, user_code_arr);
+			strcat(sql_query, char_array);
+
+			strcat(sql_query, end);
+			strcpy(char_array, finger_prt_arr);
+			strcat(sql_query, char_array);
+
+			strcat(sql_query, end);
+			strcpy(char_array, priority_arr);
+			strcat(sql_query, char_array);
+
+			strcat(sql_query, end2);
+			mysql_query(database, sql_query);
+		}
+		cout<<"Data updated from broadcast"<<endl;
+
+		send(sock_broadcast, result_arr, strlen(result_arr), 0);
+
+		usleep(30000000);
+	} while (1);
+	return 0;
+}
+
 void Sensor::sensor_init() {
 	cout << "Write sensor ID\n";
 	cin >> sensorId;
@@ -69,7 +185,7 @@ void Sensor::sensor_init() {
 int Sensor::sensor_logIn() {
 	int l = sensorId.length(), p = sensorPasswd.length();
 	char login_arr[l + 1], password_arr[p + 1], received[1024] = {0};
-
+	char readlevel[1024] = {0};
 	strcpy(login_arr, sensorId.c_str());
 	strcpy(password_arr, sensorPasswd.c_str());
 
@@ -79,6 +195,8 @@ int Sensor::sensor_logIn() {
 	read(sock_fd, received, 1024);
 
 	if (received[0] == 'A') {    // jeśli wszystko poprawnie (czujnik podlaczony)
+		read(sock_fd, readlevel, 1024);
+		sensorLevel = readlevel;
 		return 0;
 	}
 	if (received[0] == 'l') {    // jeśli Id lub hasło są błędne
@@ -92,19 +210,17 @@ int Sensor::sensorSimulate() {
 	string ID_card;
 	string userCode;
 	string userFinger;
-	//MYSQL_ROW row;
+
 
 	cout << "Enter ID card\n"; //symulacja przylozenia karty
 	cin >> ID_card;
-	//cout << ID_card << endl;
-	//row = getRow(sensorId, ID_card); //jakis if czy row==NULL
 
 	int Client_level = 0;
 	Client_level = getClientLevel(sensorId, ID_card);
-	cout << ID_card << endl << Client_level;
-	cout << "chuj" << endl;
+	cout << "ID card: " << ID_card << endl << "Client level: " << Client_level << endl;
 	int Sensor_level = 5;
-	Sensor_level = getSensorLevel(sensorId, ID_card);
+	Sensor_level = stoi(sensorLevel);
+	cout << "Sensor ID: " << sensorId << endl << "Sensor level: " << Sensor_level << endl;
 
 	bool code = false;
 	bool finger = false;
@@ -147,148 +263,118 @@ int Sensor::sensorSimulate() {
 	}
 
 	int ID = ID_card.length();
-	char ID_card_arr[ID + 1];
+    char ID_card_arr[ID + 1];
 
-	write(sock_fd, REPORT, strlen(REPORT));
-	usleep(100000);
-	write(sock_fd, ID_card_arr, strlen(ID_card_arr));
-	usleep(100000);
-	if (doors) {
-		write(sock_fd, TRUE_DOOR, strlen(TRUE_DOOR));
-	}
-	else {
-		write(sock_fd, FALSE_DOOR, strlen(FALSE_DOOR));
-	}
+    int senID = sensorId.length();
+    char sensorId_arr[senID + 1];
+
+    strcpy(ID_card_arr, ID_card.c_str());
+    strcpy(sensorId_arr, sensorId.c_str());
+
+	write(sock_fd, SIMULATE, strlen(SIMULATE));
+    usleep(100000);
+    write(sock_fd, sensorId_arr, strlen(sensorId_arr));
+    usleep(100000);
+    write(sock_fd, ID_card_arr, strlen(ID_card_arr));
+    usleep(100000);
+    if (doors) {
+        write(sock_fd, TRUE_DOOR, strlen(TRUE_DOOR));
+    }
+    else {
+        write(sock_fd, FALSE_DOOR, strlen(FALSE_DOOR));
+    }
 	return doors;
 }
-/*
-MYSQL_ROW Sensor::getRow(string sensorID, string ID_card)
-{
-	database = mysql_connection_drivers();
-    MYSQL_RES *res;
-    MYSQL_ROW row;
-    char* char_array;
-    char sql_query[1024] = "SELECT * FROM drivers WHERE driver_id = '";
-    //char *buf = strdup(sensorID);
-    strcpy(char_array, sensorID.c_str()); //dzieki maciek, dzieki
-    strcat(sql_query, char_array);
-    char *end2 = strdup("' AND id = '");
-    strcat(sql_query, end2);
-    //buf = strdup(ID_card);
-    strcpy(char_array, ID_card.c_str());
-    strcat(sql_query, char_array);
-    char *end = strdup("';");
-    strcat(sql_query, end);
 
-    mysql_query(database, sql_query);
-    res = mysql_use_result(database);
-    row = mysql_fetch_row(res);
-    return row;
-}*/
 
-int Sensor::getClientLevel(string sensorId, string ID_card){
-	cout << "chuj" << endl;
+int Sensor::getClientLevel(string sensorId, string ID_card) {
 	database = mysql_connection_drivers();
-    MYSQL_RES *res;
-    MYSQL_ROW row;
-    char* field;
-    char char_array[1024];
-    char sql_query[1024] = "SELECT priority FROM drivers WHERE driver_id = '";
-    strcpy(char_array, sensorId.c_str()); //dzieki maciek, dzieki
-    strcat(sql_query, char_array);
-    char *end2 = strdup("' AND id = '");
-    strcpy(char_array, ID_card.c_str());
-    strcat(sql_query, char_array);
-    strcat(sql_query, end2);
-    char *end = strdup("';");
-    strcat(sql_query, end);
-    //mysql_field_seek(row, 5);
-    cout << ID_card << endl;
-    mysql_query(database, sql_query);
-    res = mysql_use_result(database);
-    row = mysql_fetch_row(res);
-    cout << "chuj" << endl;
-    if(row == NULL)
-    	return 0;
-     cout << ID_card << endl;
-  	field = (char*)row[0];
-	//char *temp = field->name;
+	MYSQL_RES *res;
+	MYSQL_ROW row;
+	char* field;
+	char char_array[1024];
+	char sql_query[1024] = "SELECT priority FROM DRIVERS WHERE driver_id = '";
+	strcpy(char_array, sensorId.c_str());
+	strcat(sql_query, char_array);
+	char *end2 = strdup("' AND card_id = '");
+	strcpy(char_array, ID_card.c_str());
+	strcat(sql_query, end2);
+	strcat(sql_query, char_array);
+	char *end = strdup("';");
+	strcat(sql_query, end);
+
+	if (mysql_query(database, sql_query) != 0) 
+        return 0;
+	res = mysql_use_result(database);
+	if (mysql_error(database)) {
+		cout << mysql_error(database) << endl;
+	}
+	if(res == NULL)
+		return 0;
+	row = mysql_fetch_row(res);
+	if (row == NULL)
+		return 0;
+
+
+	field = (char*)row[0];
 	return atoi(field);
 }
 
-int Sensor::getSensorLevel(string sensorId, string ID_card){
-    database = mysql_connection_drivers();
-    MYSQL_RES *res;
-    MYSQL_ROW row;
-   	char * field;
-    char* char_array;
-    char sql_query[1024] = "SELECT level FROM drivers WHERE driver_id = '";
-    strcpy(char_array, sensorId.c_str()); //dzieki maciek, dzieki
-    strcat(sql_query, char_array);
-    char *end2 = strdup("' AND id = '");
-    strcpy(char_array, ID_card.c_str());
-    strcat(sql_query, char_array);
-    strcat(sql_query, end2);
-    char *end = strdup("';");
-    strcat(sql_query, end);
-    //mysql_field_seek(row, 5);
+bool Sensor::isCodeCorrect(string sensorId, string ID_card, string userCode) {
+	database = mysql_connection_drivers();
+	MYSQL_RES *res;
+	MYSQL_ROW row;
+	char * field;
+	char char_array[1024];
+	char sql_query[1024] = "SELECT user_code FROM DRIVERS WHERE driver_id = '";
+	strcpy(char_array, sensorId.c_str());
+	strcat(sql_query, char_array);
+	char *end2 = strdup("' AND card_id = '");
+	strcpy(char_array, ID_card.c_str());
+	strcat(sql_query, end2);
+	strcat(sql_query, char_array);
+	char *end = strdup("';");
+	strcat(sql_query, end);
 
-    mysql_query(database, sql_query);
-    res = mysql_use_result(database);
-    row = mysql_fetch_row(res);
-    field = (char*)row[0];
-	//char *temp = field->name;
-	return atoi(field);
+	if (mysql_query(database, sql_query) != 0) 
+	    return 0;
+	res = mysql_use_result(database);
+	if(res == NULL)
+		return 0;
+	row = mysql_fetch_row(res);
+	field = (char*)row[0];
+	if (field == userCode)
+		return 1;
+
+	return 0;
 }
 
-bool Sensor::isCodeCorrect(string sensorId, string ID_card, string userCode){
-    database = mysql_connection_drivers();
-    MYSQL_RES *res;
-    MYSQL_ROW row;
-   	char * field;
-    char* char_array;
-    char sql_query[1024] = "SELECT user_code FROM drivers WHERE driver_id = '";
-    strcpy(char_array, sensorId.c_str()); //dzieki maciek, dzieki
-    strcat(sql_query, char_array);
-    char *end2 = strdup("' AND id = '");
-    strcpy(char_array, ID_card.c_str());
-    strcat(sql_query, char_array);
-    strcat(sql_query, end2);
-    char *end = strdup("';");
-    strcat(sql_query, end);
-    //mysql_field_seek(row, 5);
+bool Sensor::isFingerCorrect(string sensorId, string ID_card, string userFinger) {
+	database = mysql_connection_drivers();
+	MYSQL_RES *res;
+	MYSQL_ROW row;
+	char * field;
+	char char_array[1024];
+	char sql_query[1024] = "SELECT finger_prt FROM DRIVERS WHERE driver_id = '";
+	strcpy(char_array, sensorId.c_str());
+	strcat(sql_query, char_array);
+	char *end2 = strdup("' AND card_id = '");
+	strcpy(char_array, ID_card.c_str());
+	strcat(sql_query, end2);
+	strcat(sql_query, char_array);
+	char *end = strdup("';");
+	strcat(sql_query, end);
 
-    mysql_query(database, sql_query);
-    res = mysql_use_result(database);
-    row = mysql_fetch_row(res);
-    field = (char*)row[0];
-    if(field==userCode)
-    	return 1;
-    return 0;
-}
 
-bool Sensor::isFingerCorrect(string sensorId, string ID_card, string userFinger){
-    database = mysql_connection_drivers();
-    MYSQL_RES *res;
-    MYSQL_ROW row;
-   	char * field;
-    char* char_array;
-    char sql_query[1024] = "SELECT finger_prt FROM drivers WHERE driver_id = '";
-    strcpy(char_array, sensorId.c_str()); //dzieki maciek, dzieki
-    strcat(sql_query, char_array);
-    char *end2 = strdup("' AND id = '");
-    strcpy(char_array, ID_card.c_str());
-    strcat(sql_query, char_array);
-    strcat(sql_query, end2);
-    char *end = strdup("';");
-    strcat(sql_query, end);
-    //mysql_field_seek(row, 5);
+	if (mysql_query(database, sql_query) != 0) 
+		return 0;
+	res = mysql_use_result(database);
+	if(res == NULL)
+		return 0;
+	row = mysql_fetch_row(res);
+	field = (char*)row[0];
+	if (field == userFinger)
+		return 1;
 
-    mysql_query(database, sql_query);
-    res = mysql_use_result(database);
-    row = mysql_fetch_row(res);
-    field = (char*)row[0];
-    if(field==userFinger)
-    	return 1;
-    return 0;
+	return 0;
 }

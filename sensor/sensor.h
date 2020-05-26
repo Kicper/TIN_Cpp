@@ -14,18 +14,20 @@ class Sensor {
     	char *database;
 	};	
 public:
-	int sock_fd;
+	int sock_fd, sock_broadcast;
 	string sensorId = "Id";
 	string sensorPasswd = "Passwd";
+	string sensorLevel = "";
 public:
 	MYSQL* mysql_connection_drivers();
-	//MYSQL_ROW getRow(string sensorID, string ID_card);
 	void sensor_init();
 	int sensor_connect();
+	void sensor_broadcast();
+	int broadcastService();
 	int sensor_logIn();
 	int sensorSimulate();
 	int getClientLevel(string sensorId, string ID_card);
-	int getSensorLevel(string sensorId, string ID_card);
+	int getSensorLevel(string sensorId);
 	bool isCodeCorrect( string sensorId, string ID_card, string userCode);
 	bool isFingerCorrect(string sensorId, string ID_card, string userFinger);
 };
