@@ -50,7 +50,6 @@ int AdminSocket::connectLogIn(string login, string password) {
 	strcpy(login_arr, login.c_str());
 	strcpy(password_arr, password.c_str());
 
-
 	send(sock_fd, login_arr, strlen(login_arr), 0);
 	usleep(100000);
 	send(sock_fd, password_arr, strlen(password_arr), 0);
@@ -283,31 +282,29 @@ int AdminSocket::connectAddDriver(string ID_driver, string pass_driver, string p
 
 
 
-int AdminSocket::connectBroadcastCards() {
-
-	string method = "b";
-	int m = method.length();
-	char method_arr[m+1], received[1024] = {0};
+int AdminSocket::connectDeleteDriver(string ID_driver) {
+	string method = "D";
+	int m = method.length(), d = ID_driver.length();
+	char method_arr[m+1], ID_driver_arr[d+1], received[1024] = {0};
 
 	strcpy(method_arr, method.c_str());
+	strcpy(ID_driver_arr, ID_driver.c_str());
 
 
 	send(sock_fd, method_arr, strlen(method_arr), 0);
 	read(sock_fd, received, 1024);
-	if (received[0] != 'b') {    // metoda nie istnieje
+	if (received[0] != 'D') {    // metoda nie istnieje
 		return 1;
 	}
 
+	send(sock_fd, ID_driver_arr, strlen(ID_driver_arr), 0);
+	read(sock_fd, received, 1024);
 	if (received[0] == 'A') {    // wszystko poprawnie
 		return 0;
 	}
-	if (received[0] == 'c') {    // problem z połączeniem z jakimś sterownikiem
+	if (received[0] == 'i') {    // ID sterownika nie istnieje więc nie może być ona usunięta
 		return 2;
 	}
-	if (received[0] == 'e') {    // jakiś sterownik nie przesłał odpowiedzi, że wszystko w porządku
-		return 3;
-	}
 
-	return -1;
 	return -1;
 }

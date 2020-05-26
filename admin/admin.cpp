@@ -139,7 +139,7 @@ void Admin::deleteCard(AdminSocket adminSocket) {
 	int result;
 	string ID_card;
 	
-	cout<<"\nEnter new card's ID: ";
+	cout<<"\nEnter card's ID to delete: ";
 	cin>>ID_card;
 
 	result = adminSocket.connectDeleteCard(ID_card);
@@ -213,18 +213,20 @@ void Admin::addDriver(AdminSocket adminSocket) {
 
 
 
-void Admin::broadcastCards(AdminSocket adminSocket) {
+void Admin::deleteDriver(AdminSocket adminSocket) {
 	int result;
+	string ID_driver;
+	
+	cout<<"\nEnter driver's ID to delete: ";
+	cin>>ID_driver;
 
-	result = adminSocket.connectBroadcastCards();
+	result = adminSocket.connectDeleteDriver(ID_driver);
     if (result == 0) {
-		cout<<"\nSuccesfully broadcasted cards! Choose another operation:";
+		cout<<"\nSuccesfully deleted driver! Choose another operation:";
 	} else if (result == 1) {
 		cout<<"\nThis method is not handled by server. Try another operation...";
 	} else if (result == 2) {
-		cout<<"\nThere is problem with connection to one of drivers. Try again...";
-	} else if (result == 3) {
-		cout<<"\nOne of drivers didn't confirm recieved changes. Try again...";
+		cout<<"\nDriver's ID doesn't exist so you can't delete it. Try again...";
 	} else {
 		cout<<"\nOperation failed.";
 	}

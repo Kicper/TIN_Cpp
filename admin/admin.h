@@ -14,5 +14,5 @@ class Admin {
 	void deleteCard(class AdminSocket adminSocket);
 	void setAccessRights(class AdminSocket adminSocket);
 	void addDriver(class AdminSocket adminSocket);
-	void broadcastCards(class AdminSocket adminSocket);
+	void deleteDriver(class AdminSocket adminSocket);
 };

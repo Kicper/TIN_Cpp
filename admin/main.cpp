@@ -23,7 +23,7 @@ int main()
 		cout<<"\n4. Delete card.";
 		cout<<"\n5. Set card's access rights.";
 		cout<<"\n6. Add driver.";
-		cout<<"\n7. Broadcast cards to drivers.";
+		cout<<"\n7. Delete driver.";
 		cout<<"\n8. Log out.";
 		cout<<"\nEnter which action you want to choose: ";
 		cin>>input;
@@ -61,7 +61,7 @@ int main()
 				break;
 			case '7':
 				cout<<"\n";
-				admin.broadcastCards(adminSocket);
+				admin.deleteDriver(adminSocket);
 				cout<<"\n";
 				break;
 			case '8':
