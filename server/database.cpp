@@ -261,7 +261,7 @@ void Database::baseSetAccessRights(char* idCard, char* priority) {
 
 void Database::baseAddDriver(char* idDriver, char* passwd, char* priority) {
 	database = mysql_connection_setup();
-	char sql_query[1024] = "INSERT INTO DRIVERS (driver_id, passwd, priority) VALUES ('";
+	char sql_query[1024] = "INSERT INTO DRIVERS (driver_id, passwd, driver_priority) VALUES ('";
 	strcat(sql_query, idDriver);
 	char *end = strdup("', '");
 	strcat(sql_query, end);
@@ -270,6 +270,70 @@ void Database::baseAddDriver(char* idDriver, char* passwd, char* priority) {
 	strcat(sql_query, priority);
 	char *end2 = strdup("');");
 	strcat(sql_query, end2);
-
 	mysql_query(database, sql_query);
+}
+
+
+
+void Database::baseDeleteDriver(char* idDriver) {
+	database = mysql_connection_setup();
+	char sql_query[1024] = "DELETE FROM DRIVERS WHERE driver_id = '"; //ustawiamy query
+	strcat(sql_query, idDriver);
+	char *end2 = strdup("';");
+	strcat(sql_query, end2);
+
+	mysql_query(database, sql_query); //wykonanie query
+}
+
+
+
+MYSQL_RES* Database::baseGetCardsTable() {
+	database = mysql_connection_setup();
+	char sql_query[1024] = "SELECT * FROM CARDS;";
+	MYSQL_RES *result;
+	mysql_query(database, sql_query);
+	result = mysql_store_result(database);
+	cout<<"mysql_num_rows:     "<<mysql_num_rows(result)<<endl;
+	return result;
+}
+
+
+
+int Database::baseGetSensorLevel(char* idDriver) {
+	database = mysql_connection_setup();
+	MYSQL_RES *res;
+	MYSQL_ROW row; //zmienne do obslugi wynikow
+
+	idDriver = strdup(idDriver); //przygotowanie query
+	char sql_query[1024] = "SELECT driver_priority FROM DRIVERS WHERE driver_id = '";
+	strcat(sql_query, idDriver);
+	char *end = strdup("';");
+	strcat(sql_query, end);
+
+	mysql_query(database, sql_query);  //wykonanie query i pobranie wyniku
+	res = mysql_use_result(database);
+	row = mysql_fetch_row(res);
+
+	return atoi(row[0]);
+}
+
+
+
+void Database::baseStoreData(char* driver_id, char* card_id, char* door) {
+    database = mysql_connection_setup();
+    char sql_query[1024] = "INSERT INTO DATA (numer, driver_id, card_id, door) VALUES (NULL, '";
+
+    strcat(sql_query, driver_id);
+    char *end = strdup("', '");
+    strcat(sql_query, end);
+    strcat(sql_query, card_id);
+    strcat(sql_query, end);
+    strcat(sql_query, door);
+
+    char *end2 = strdup("');");
+    strcat(sql_query, end2);
+
+    mysql_query(database, sql_query);
+
+    return;
 }

@@ -28,11 +28,15 @@
 #define AA "A"
 #define S "s"
 #define D "d"
+#define DD "D"
+#define B "b"
 
 #define ERR "error"
 
 #define SERV_PORT 6669
 #define SERV_PORT2 7000
+#define SERV_PORT_6 7001
+#define SERV_PORT2_6 7002
 
 #define LOGIN_LENGTH_MAX 20
 #define LOGIN_LENGTH_MIN 4
@@ -46,78 +50,140 @@ using namespace std;
 
 int Server::runServer(Database dbase) {
 
-	int sock, sock2; // gniazdo glowne serwera
+	int sock, sock2, sock_6, sock2_6; // gniazdo glowne serwera
 	int msgsock; // zaasocjowane gniazdo
 	socklen_t length;
 	struct sockaddr_in server;
+	struct sockaddr_in6 server_6;
 
 	fd_set ready;//swieze
 	struct timeval to;
 	int nfds, nactive;
 
-	/* tworzenie gniazda dla admina*/
+
+
+	// tworzenie gniazda dla admina IPv4
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock == -1) {
 		perror("opening stream socket");
 		return -1;
 	}
 
-	/* dowiaz adres do gniazda  dla admina*/
+	// dowiaz adres do gniazda  dla admina
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = INADDR_ANY;
 	server.sin_port = htons(SERV_PORT);
-	if (bind(sock, (struct sockaddr *) &server, sizeof server)
-	        == -1) {
+	if (bind(sock, (struct sockaddr *) &server, sizeof server) == -1) {
 		perror("binding stream socket");
 		return -1;
 	}
 
-	/* adres na konsoli */
+	// adres na konsoli
 	length = sizeof( server);
-	if (getsockname(sock, (struct sockaddr *) &server, &length)
-	        == -1) {
+	if (getsockname(sock, (struct sockaddr *) &server, &length) == -1) {
 		perror("getting socket name");
 		return -1;
 	}
 	printf("Socket port #%d\n", ntohs(server.sin_port));
 
-	/* obsluga wiadomosci */
+	// obsluga wiadomosci
 	listen(sock, 3);
 
-	/* tworzenie gniazda dla czujnika*/
+
+
+	// tworzenie gniazda dla admina IPv6
+	sock_6 = socket(AF_INET6, SOCK_STREAM, 0);
+	if (sock_6 == -1) {
+		perror("opening stream socket");
+		return -1;
+	}
+
+	// dowiaz adres do gniazda  dla admina
+	server_6.sin6_family = AF_INET6;
+	server_6.sin6_addr = in6addr_any;
+	server_6.sin6_port = htons(SERV_PORT_6);
+	if (bind(sock_6, (struct sockaddr *) &server_6, sizeof server_6) == -1) {
+		perror("binding stream socket");
+		return -1;
+	}
+
+	// adres na konsoli
+	length = sizeof( server_6);
+	if (getsockname(sock_6, (struct sockaddr *) &server_6, &length) == -1) {
+		perror("getting socket name");
+		return -1;
+	}
+	printf("Socket port #%d\n", ntohs(server_6.sin6_port));
+
+	// obsluga wiadomosci
+	listen(sock_6, 3);
+
+
+
+	// tworzenie gniazda dla czujnika IP4
 	sock2 = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock2 == -1) {
 		perror("opening stream socket");
 		return -1;
 	}
-	/* dowiaz adres do gniazda  dla czujnika*/
+	// dowiaz adres do gniazda  dla czujnika
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = INADDR_ANY;
 	server.sin_port = htons(SERV_PORT2);
-	if (bind(sock2, (struct sockaddr *) &server, sizeof server)
-	        == -1) {
+	if (bind(sock2, (struct sockaddr *) &server, sizeof server) == -1) {
 		perror("binding stream socket");
 		return -1;
 	}
 
-	/* adres na konsoli */
+	// adres na konsoli
 	length = sizeof( server);
-	if (getsockname(sock2, (struct sockaddr *) &server, &length)
-	        == -1) {
+	if (getsockname(sock2, (struct sockaddr *) &server, &length) == -1) {
 		perror("getting socket name");
 		return -1;
 	}
 	printf("Socket port #%d\n", ntohs(server.sin_port));
 
-	/* obsluga wiadomosci */
+	// obsluga wiadomosci
 	listen(sock2, 3);
 
-	nfds = sock2 + 1;
+
+
+	// tworzenie gniazda dla czujnika IP6
+	sock2_6 = socket(AF_INET6, SOCK_STREAM, 0);
+	if (sock2_6 == -1) {
+		perror("opening stream socket");
+		return -1;
+	}
+	// dowiaz adres do gniazda  dla czujnika
+	server_6.sin6_family = AF_INET6;
+	server_6.sin6_addr = in6addr_any;
+	server_6.sin6_port = htons(SERV_PORT2_6);
+	if (bind(sock2_6, (struct sockaddr *) &server_6, sizeof server_6) == -1) {
+		perror("binding stream socket");
+		return -1;
+	}
+
+	// adres na konsoli
+	length = sizeof( server_6);
+	if (getsockname(sock2_6, (struct sockaddr *) &server_6, &length) == -1) {
+		perror("getting socket name");
+		return -1;
+	}
+	printf("Socket port #%d\n", ntohs(server_6.sin6_port));
+
+	// obsluga wiadomosci
+	listen(sock2_6, 3);
+
+
+
+	nfds = sock2_6 + 1;
 
 	do {
 		FD_ZERO(&ready);
 		FD_SET(sock, &ready);
 		FD_SET(sock2, &ready);
+		FD_SET(sock_6, &ready);
+		FD_SET(sock2_6, &ready);
 		to.tv_sec = 2;
 		to.tv_usec = 0;
 
@@ -126,7 +192,7 @@ int Server::runServer(Database dbase) {
 			continue;
 		}
 
-		if (FD_ISSET(sock, &ready)) { //obsluga admina
+		if (FD_ISSET(sock, &ready)) { //obsluga admina IPv4
 
 			msgsock = accept(sock, (struct sockaddr *) 0, (socklen_t *) 0);
 			if (msgsock == -1 )
@@ -140,25 +206,56 @@ int Server::runServer(Database dbase) {
 				}
 				close(msgsock);
 			}
-
 		}
 
-		if (FD_ISSET(sock2, &ready)) { //obsluga czujnika
+		if (FD_ISSET(sock2, &ready)) { //obsluga czujnika IPv4
 
 			msgsock = accept(sock2, (struct sockaddr *) 0, (socklen_t *) 0);
 			if (msgsock == -1 )
 				perror("accept");
 			else {
 				if ( fork() == 0) {
-					close(sock);
+					close(sock2);
 					connectionDriver(msgsock, dbase); //obsluga polaczenia
 					close(msgsock);
 					exit(0);
 				}
 				close(msgsock);
 			}
-
 		}
+
+		if (FD_ISSET(sock_6, &ready)) { //obsluga admina IPv6
+
+			msgsock = accept(sock_6, (struct sockaddr *) 0, (socklen_t *) 0);
+			if (msgsock == -1 )
+				perror("accept");
+			else {
+				if ( fork() == 0) {
+					close(sock_6);
+					connectionService(msgsock, dbase); //obsluga polaczenia
+					close(msgsock);
+					exit(0);
+				}
+				close(msgsock);
+			}
+		}
+
+		if (FD_ISSET(sock2_6, &ready)) { //obsluga czujnika IPv6
+
+			msgsock = accept(sock2_6, (struct sockaddr *) 0, (socklen_t *) 0);
+			if (msgsock == -1 )
+				perror("accept");
+			else {
+				if ( fork() == 0) {
+					close(sock2_6);
+					connectionService(msgsock, dbase); //obsluga polaczenia
+					close(msgsock);
+					exit(0);
+				}
+				close(msgsock);
+			}
+		}
+
 	} while (1);
 	return 0;
 }
@@ -260,6 +357,12 @@ int Server::driverAuthentication(int msgsock, Database dbase) {
 	} while (!idDriverb || !passwdb);
 
 	write(msgsock, AUTH, strlen(AUTH));
+
+	int level = dbase.baseGetSensorLevel(idDriver);
+	char lev[10] = "";
+	sprintf(lev, "%d", level);
+
+	write(msgsock, lev, strlen(lev));
 	return 0;
 }
 
@@ -386,6 +489,11 @@ void Server::connectionService(int msgsock, Database dbase) {
 			write(msgsock, D, strlen(D));
 			addDriver(msgsock, dbase);
 			break;
+		case 'D':
+			cout << "\nDeleting driver" << endl;
+			write(msgsock, DD, strlen(DD));
+			deleteDriver(msgsock, dbase);
+			break;
 		default:
 			cout << "\nWrong option choosen" << endl;
 			write(msgsock, ERR, strlen(ERR));
@@ -419,40 +527,19 @@ void Server::connectionDriver(int msgsock, Database dbase) {
 		}
 
 		switch (buf[0]) {
-		/*
-		case 'c':
-			cout << "\nCreating account" << endl;
-			write(msgsock, C, strlen(C));
-			createAccount(msgsock, dbase);
-			break;
-		case 'C':
-			cout << "\nDeleting account" << endl;
-			write(msgsock, CC, strlen(CC));
-			deleteAccount(msgsock, dbase);
-			break;
-		case 'a':
-			cout << "\nAdding Card" << endl;
-			write(msgsock, A, strlen(A));
-			addCard(msgsock, dbase);
-			break;
-		case 'A':
-			cout << "\nDeleting Card" << endl;
-			write(msgsock, AA, strlen(AA));
-			deleteCard(msgsock, dbase);
+		case 'b':
+			cout << "\nCreate broadcast" << endl;
+			write(msgsock, B, strlen(B));
+			broadcast(msgsock, dbase);
 			break;
 		case 's':
-			cout << "\nSet Access Rights" << endl;
+			cout << "\nPutting data to database" << endl;
 			write(msgsock, S, strlen(S));
-			setAccessRights(msgsock, dbase);
-			break;
-		case 'd':
-			cout << "\nAdding driver" << endl;
-			write(msgsock, D, strlen(D));
-			addDriver(msgsock, dbase);
+			storingData(msgsock, dbase);
 			break;
 		default:
 			cout << "\nWrong option choosen" << endl;
-			write(msgsock, ERR, strlen(ERR));*/
+			write(msgsock, ERR, strlen(ERR));
 		}
 	} while (1);
 	cout << "BYE CONNECTION: " << msgsock << endl;
@@ -762,48 +849,115 @@ void Server::addDriver(int msgsock, class Database dbase) {
 
 
 
-/*
-void Server::addNewPlan()
-{
-	char plan[2048];
-	char passwd[1024];
+void Server::deleteDriver(int msgsock, Database dbase) {
+	char idDriver[1024];
+	int rval = 0;
 
-	memset(plan, 0, sizeof plan); // wczytywanie oraz weryfikacja loginu
-	if ((rval = read(msgsock, plan, 2048)) == -1)
+	memset(idDriver, 0, sizeof idDriver); // wczytanie oraz weryfikacja poprawnosci ID karty
+	if ((rval = read(msgsock, idDriver, 1024)) == -1)
 		perror("reading stream message");
 	if (rval == 0) {
-		cout << "Connection ended while adding new plan" << endl;
+		cout << "Connection ended while adding ID Card" << endl;
 		exit(0);
 	}
 
-	printf("-->%d: %s\n", msgsock, plan);
+	printf("-->%d: %s\n", msgsock, idDriver);
 
-	memset(passwd, 0, sizeof passwd); // wczytywanie oraz weryfikacja hasla
-	if (read(msgsock, passwd, 1024) == -1)
-		perror("reading stream message");
-	if (rval == 0) {
-		cout << "Connection ended while creating password" << endl;
-		exit(0);
-	} */
-
-	//printf("-->%d: %s\n", msgsock, passwd);
-
-//	loginb = isLoginCorrect(login, dbase);
-	//passwdb = isPasswdCorrect(passwd);
-/*
-	if (loginb == 0) {
-		write(msgsock, ERRLOG, strlen(ERRLOG));
+	if (isIdDriverCorrect(idDriver, dbase)) {
+		cout << msgsock << ": " << ERRIDDRIVER << endl;
+		write(msgsock, ERRIDDRIVER, strlen(ERRIDDRIVER));
 		return;
 	}
-	if (loginb == 2 || passwdb == 1) {
-		write(msgsock, ERRPASS, strlen(ERRPASS));
-		return;
-	} 
 
-	dbase.baseAddPlan(plan);
+	dbase.baseDeleteDriver(idDriver);
 
+	cout << "Driver deleted" << endl;
 	write(msgsock, AUTH, strlen(AUTH));
-	cout << "New added!" << endl;
 
 	return;
-} */
+}
+
+
+
+void Server::broadcast(int msgsock, class Database dbase) {
+
+	MYSQL_RES* table = dbase.baseGetCardsTable();
+	MYSQL_ROW row;
+	char received[1024] = {0};
+
+	char *card_id_arr, *user_code_arr, *finger_prt_arr, *priority_arr, number_of_rows[10] = "";
+	int number = mysql_num_rows(table);
+
+	cout << "number: " << number << endl;
+	sprintf(number_of_rows, "%d", number);
+
+
+	send(msgsock, number_of_rows, strlen(number_of_rows), 0);
+	usleep(100000);
+
+	while ( (row = mysql_fetch_row(table)) != NULL) {
+
+		card_id_arr = (char*)row[0];
+		user_code_arr = (char*)row[1];
+		finger_prt_arr = (char*)row[2];
+		priority_arr = (char*)row[3];
+
+		send(msgsock, card_id_arr, strlen(card_id_arr), 0);
+		usleep(100000);
+		send(msgsock, user_code_arr, strlen(user_code_arr), 0);
+		usleep(100000);
+		send(msgsock, finger_prt_arr, strlen(finger_prt_arr), 0);
+		usleep(100000);
+		send(msgsock, priority_arr, strlen(priority_arr), 0);
+		usleep(100000);
+	}
+
+	read(msgsock, received, 1024);
+
+	cout << "Data broadcasted" << endl;
+
+	return;
+}
+
+
+
+void Server::storingData(int msgsock, Database dbase) {
+    char driver_id[1024] = {0};
+    char card_id[1024] = {0};
+    char door[1024] = {0};
+    int rval = 0;
+
+    memset(driver_id, 0, sizeof driver_id); // wczytanie oraz weryfikacja poprawnosci ID sterownika
+    if ((rval = read(msgsock, driver_id, 1024)) == -1)
+        perror("reading stream message");
+    if (rval == 0) {
+        cout << "Connection ended while adding driver's ID" << endl;
+        exit(0);
+    }
+
+    printf("-->%d: %s\n", msgsock, driver_id);
+
+    memset(card_id, 0, sizeof card_id);    // wczytanie oraz weryfikacja poprawnosci hasła
+    if (read(msgsock, card_id, 1024) == -1)
+        perror("reading stream message");
+    if (rval == 0) {
+        cout << "Connection ended while adding password" << endl;
+        exit(0);
+    }
+
+    printf("-->%d: %s\n", msgsock, card_id);
+
+    memset(door, 0, sizeof door); // wczytanie oraz weryfikacja poprawnosci ID sterownika
+    if ((rval = read(msgsock, door, 1024)) == -1)
+        perror("reading stream message");
+    if (rval == 0) {
+        cout << "Connection ended while adding driver's ID" << endl;
+        exit(0);
+    }
+
+    printf("-->%d: %s\n", msgsock, door);
+
+    dbase.baseStoreData(driver_id, card_id, door);
+
+    return;
+}

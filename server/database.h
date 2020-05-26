@@ -28,4 +28,8 @@ class Database {
 	void baseDeleteCard(char* idCard);
 	void baseSetAccessRights(char* idCard, char* priority);
 	void baseAddDriver(char* idDriver, char* passwd, char* priority);
+	void baseDeleteDriver(char* idDriver);
+	int baseGetSensorLevel(char* idDriver);
+	MYSQL_RES *baseGetCardsTable();
+	void baseStoreData(char* driver_id, char* card_id, char* door);
 };
